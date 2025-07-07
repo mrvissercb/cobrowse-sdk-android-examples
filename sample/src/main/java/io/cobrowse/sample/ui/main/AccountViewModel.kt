@@ -32,6 +32,11 @@ class AccountViewModel(private val loginRepository: LoginRepository) : BaseViewM
 
     fun requestSessionCode() {
         CobrowseIO.instance().createSession { error, session ->
+            if (error !== null) {
+                System.err.println("Error creating session")
+                error.printStackTrace()
+            }
+
             val code = session?.code()
             if (code.isNullOrEmpty()) {
                 _sessionCodeResult.value = ""

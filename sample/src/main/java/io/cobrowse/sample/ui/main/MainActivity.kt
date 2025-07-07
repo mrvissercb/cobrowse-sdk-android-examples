@@ -42,6 +42,7 @@ import io.cobrowse.sample.ui.dpToPx
 import io.cobrowse.sample.ui.getThemeColor
 import io.cobrowse.sample.ui.login.LoginActivity
 import io.cobrowse.sample.ui.popNavigation
+import io.cobrowse.sample.ui.VoiceChatIframeController
 
 /**
  * Activity that hosts all fragments when user is logged in.
@@ -114,6 +115,9 @@ class MainActivity : AppCompatActivity(),
         setUpBottomSheet(savedInstanceState)
 
         setUpBackPressedCallback()
+        
+        // Request microphone permissions for voice chat
+        VoiceChatIframeController.getInstance().requestPermissionsIfNeeded(this)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

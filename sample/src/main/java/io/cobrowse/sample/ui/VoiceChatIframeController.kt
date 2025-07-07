@@ -27,6 +27,7 @@ class VoiceChatIframeController private constructor() {
     private var webView: WebView? = null
     private var isReady = false
     private var isInitialized = false
+    private var isSessionActive = false
 
     companion object {
         private const val TAG = "VoiceChatIframe"
@@ -44,7 +45,7 @@ class VoiceChatIframeController private constructor() {
 
     fun initialize(context: Context) {
         if (webView != null) {
-            Log.d(TAG, "VoiceChatIframeController already initialized")
+            Log.d(TAG, "VoiceChatIframeController already initialized - isReady: $isReady, isInitialized: $isInitialized")
             return
         }
         
@@ -52,6 +53,7 @@ class VoiceChatIframeController private constructor() {
         webView = WebView(context.applicationContext)
         setupWebView()
         loadIframe()
+        Log.d(TAG, "VoiceChatIframeController setup complete, waiting for iframe ready signal")
     }
     
     fun requestPermissionsIfNeeded(activity: Activity): Boolean {
@@ -84,7 +86,7 @@ class VoiceChatIframeController private constructor() {
         webSettings.allowUniversalAccessFromFileURLs = true
         webSettings.databaseEnabled = true
 
-        // Enable microphone permissions
+        // Enable microphone permissions and console logging
         webView.webChromeClient = object : WebChromeClient() {
             override fun onPermissionRequest(request: PermissionRequest) {
                 Log.d(TAG, "WebView permission request: ${request.resources.contentToString()}")
@@ -104,9 +106,39 @@ class VoiceChatIframeController private constructor() {
             override fun onPermissionRequestCanceled(request: PermissionRequest) {
                 Log.w(TAG, "WebView permission request canceled: ${request.resources.contentToString()}")
             }
+            
+            override fun onConsoleMessage(consoleMessage: android.webkit.ConsoleMessage): Boolean {
+                Log.d(TAG, "WebView Console [${consoleMessage.messageLevel()}]: ${consoleMessage.message()} (${consoleMessage.sourceId()}:${consoleMessage.lineNumber()})")
+                return true
+            }
         }
 
-        webView.webViewClient = WebViewClient()
+        webView.webViewClient = object : WebViewClient() {
+            override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                Log.d(TAG, "WebView page started loading: $url")
+                super.onPageStarted(view, url, favicon)
+            }
+            
+            override fun onPageFinished(view: WebView?, url: String?) {
+                Log.d(TAG, "WebView page finished loading: $url")
+                super.onPageFinished(view, url)
+            }
+            
+            override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
+                Log.e(TAG, "WebView error: $errorCode - $description for URL: $failingUrl")
+                super.onReceivedError(view, errorCode, description, failingUrl)
+            }
+            
+            override fun onReceivedHttpError(view: WebView?, request: android.webkit.WebResourceRequest?, errorResponse: android.webkit.WebResourceResponse?) {
+                Log.e(TAG, "WebView HTTP error: ${errorResponse?.statusCode} for URL: ${request?.url}")
+                super.onReceivedHttpError(view, request, errorResponse)
+            }
+            
+            override fun shouldInterceptRequest(view: WebView?, request: android.webkit.WebResourceRequest?): android.webkit.WebResourceResponse? {
+                Log.d(TAG, "WebView loading resource: ${request?.url}")
+                return super.shouldInterceptRequest(view, request)
+            }
+        }
         webView.addJavascriptInterface(WebAppInterface(), "Android")
     }
 
@@ -127,31 +159,53 @@ class VoiceChatIframeController private constructor() {
                 <iframe id='xi-iframe' src='$vaUrl/iframe' 
                         allow='microphone' frameborder='0'></iframe>
                 <script>
+                    console.log('Main HTML loaded, setting up iframe communication');
+                    
                     window.addEventListener('message', function(event) {
+                        console.log('Received message from iframe:', event.data);
                         Android.onMessage(JSON.stringify(event.data));
                     });
                     
                     function sendMessage(message) {
                         try {
+                            console.log('Sending message to iframe:', message);
                             const iframe = document.getElementById('xi-iframe');
                             if (iframe && iframe.contentWindow) {
                                 iframe.contentWindow.postMessage(JSON.parse(message), '*');
+                            } else {
+                                console.error('Iframe not found or not ready');
                             }
                         } catch (e) {
                             console.error('Error sending message:', e);
                         }
                     }
+                    
+                    // Check if iframe loads
+                    document.addEventListener('DOMContentLoaded', function() {
+                        console.log('DOM loaded');
+                        const iframe = document.getElementById('xi-iframe');
+                        if (iframe) {
+                            iframe.onload = function() {
+                                console.log('Iframe loaded successfully');
+                            };
+                            iframe.onerror = function() {
+                                console.error('Iframe failed to load');
+                            };
+                        }
+                    });
                 </script>
             </body>
             </html>
         """.trimIndent()
 
+        Log.d(TAG, "Loading iframe HTML with base URL: $vaUrl")
         webView.loadDataWithBaseURL(vaUrl, html, "text/html", "UTF-8", null)
     }
 
     private inner class WebAppInterface {
         @JavascriptInterface
         fun onMessage(message: String) {
+            Log.d(TAG, "Received message from iframe: $message")
             android.os.Handler(android.os.Looper.getMainLooper()).post {
                 try {
                     val msg = JSONObject(message)
@@ -219,14 +273,6 @@ class VoiceChatIframeController private constructor() {
 
             Log.d(TAG, "Sending init message: $initMessage")
             webView.evaluateJavascript("sendMessage('${initMessage.toString().replace("'", "\\'")}')", null)
-
-            // Start session immediately
-            val startMessage = JSONObject().apply {
-                put("type", "startSession")
-            }
-
-            Log.d(TAG, "Sending start session message")
-            webView.evaluateJavascript("sendMessage('${startMessage.toString().replace("'", "\\'")}')", null)
             
             isInitialized = true
             Log.d(TAG, "Voice chat initialization completed")
@@ -256,6 +302,41 @@ class VoiceChatIframeController private constructor() {
         }
     }
 
+    fun toggleSession() {
+        Log.d(TAG, "toggleSession called - isInitialized: $isInitialized, isReady: $isReady, isSessionActive: $isSessionActive")
+        
+        if (!isInitialized) {
+            Log.w(TAG, "Cannot toggle session - controller not initialized")
+            return
+        }
+        
+        if (isSessionActive) {
+            stopSession()
+        } else {
+            startSession()
+        }
+    }
+
+    private fun startSession() {
+        if (!isInitialized) {
+            Log.w(TAG, "Cannot start session - controller not initialized")
+            return
+        }
+        
+        val webView = requireNotNull(webView) { "WebView not initialized" }
+        try {
+            val startMessage = JSONObject().apply {
+                put("type", "startSession")
+            }
+
+            Log.d(TAG, "Starting voice chat session")
+            webView.evaluateJavascript("sendMessage('${startMessage.toString().replace("'", "\\'")}')", null)
+            isSessionActive = true
+        } catch (e: JSONException) {
+            Log.e(TAG, "Error starting session", e)
+        }
+    }
+
     fun sendContextualUpdate(text: String) {
         val webView = requireNotNull(webView) { "WebView not initialized" }
         try {
@@ -270,14 +351,16 @@ class VoiceChatIframeController private constructor() {
         }
     }
 
-    fun endSession() {
+    private fun stopSession() {
         val webView = requireNotNull(webView) { "WebView not initialized" }
         try {
             val message = JSONObject().apply {
                 put("type", "endSession")
             }
 
+            Log.d(TAG, "Stopping voice chat session")
             webView.evaluateJavascript("sendMessage('${message.toString().replace("'", "\\'")}')", null)
+            isSessionActive = false
         } catch (e: JSONException) {
             Log.e(TAG, "Error ending session", e)
         }
@@ -287,7 +370,9 @@ class VoiceChatIframeController private constructor() {
         Log.d(TAG, "Destroying VoiceChatIframeController")
         try {
             // First try to end session
-            endSession()
+            if (isSessionActive) {
+                stopSession()
+            }
             
             // Clear the WebView
             webView?.let { webView ->
@@ -303,6 +388,7 @@ class VoiceChatIframeController private constructor() {
             webView = null
             isReady = false
             isInitialized = false
+            isSessionActive = false
             INSTANCE = null
         }
     }

@@ -115,9 +115,6 @@ class MainActivity : AppCompatActivity(),
         setUpBottomSheet(savedInstanceState)
 
         setUpBackPressedCallback()
-        
-        // Request microphone permissions for voice chat
-        VoiceChatIframeController.getInstance().requestPermissionsIfNeeded(this)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

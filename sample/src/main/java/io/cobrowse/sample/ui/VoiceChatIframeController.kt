@@ -262,7 +262,7 @@ class VoiceChatIframeController private constructor() {
                 })
                 put("apiBaseUrl", vaUrl)
                 put("deviceId", deviceId)
-                put("micMuted", false)
+                put("micMuted", true)
                 put("url", "https://financetracker.com")
             }
 
@@ -302,24 +302,14 @@ class VoiceChatIframeController private constructor() {
         }
     }
 
-    fun toggleSession() {
-        Log.d(TAG, "toggleSession called - isInitialized: $isInitialized, isReady: $isReady, isSessionActive: $isSessionActive")
-        
+    fun startSession() {
         if (!isInitialized) {
-            Log.w(TAG, "Cannot toggle session - controller not initialized")
+            Log.w(TAG, "Cannot start session - controller not initialized")
             return
         }
         
         if (isSessionActive) {
-            stopSession()
-        } else {
-            startSession()
-        }
-    }
-
-    private fun startSession() {
-        if (!isInitialized) {
-            Log.w(TAG, "Cannot start session - controller not initialized")
+            Log.d(TAG, "Session already active")
             return
         }
         
@@ -336,6 +326,51 @@ class VoiceChatIframeController private constructor() {
             Log.e(TAG, "Error starting session", e)
         }
     }
+    
+    fun stopSession() {
+        if (!isSessionActive) {
+            Log.d(TAG, "No active session to stop")
+            return
+        }
+        
+        val webView = requireNotNull(webView) { "WebView not initialized" }
+        try {
+            val message = JSONObject().apply {
+                put("type", "endSession")
+            }
+
+            Log.d(TAG, "Stopping voice chat session")
+            webView.evaluateJavascript("sendMessage('${message.toString().replace("'", "\\'")}')") { result ->
+                Log.d(TAG, "Stop session result: $result")
+            }
+            isSessionActive = false
+        } catch (e: JSONException) {
+            Log.e(TAG, "Error ending session", e)
+        }
+    }
+    
+    fun setMicMuted(muted: Boolean) {
+        if (!isInitialized || !isSessionActive) {
+            Log.w(TAG, "Cannot change mic state - session not active")
+            return
+        }
+        
+        val webView = requireNotNull(webView) { "WebView not initialized" }
+        try {
+            val message = JSONObject().apply {
+                put("type", "setMicMuted")
+                put("payload", JSONObject().put("muted", muted))
+            }
+
+            Log.d(TAG, "Setting mic muted: $muted")
+            webView.evaluateJavascript("sendMessage('${message.toString().replace("'", "\\'")}')") { result ->
+                Log.d(TAG, "Set mic muted result: $result")
+            }
+        } catch (e: JSONException) {
+            Log.e(TAG, "Error setting mic muted state", e)
+        }
+    }
+
 
     fun sendContextualUpdate(text: String) {
         val webView = requireNotNull(webView) { "WebView not initialized" }
@@ -351,20 +386,6 @@ class VoiceChatIframeController private constructor() {
         }
     }
 
-    private fun stopSession() {
-        val webView = requireNotNull(webView) { "WebView not initialized" }
-        try {
-            val message = JSONObject().apply {
-                put("type", "endSession")
-            }
-
-            Log.d(TAG, "Stopping voice chat session")
-            webView.evaluateJavascript("sendMessage('${message.toString().replace("'", "\\'")}')", null)
-            isSessionActive = false
-        } catch (e: JSONException) {
-            Log.e(TAG, "Error ending session", e)
-        }
-    }
 
     fun destroy() {
         Log.d(TAG, "Destroying VoiceChatIframeController")

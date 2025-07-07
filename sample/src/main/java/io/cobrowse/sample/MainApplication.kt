@@ -4,12 +4,18 @@ import android.app.Activity
 import android.app.Application
 import android.graphics.PixelFormat
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
+import android.view.GestureDetector
 import android.view.Gravity
+import android.view.MotionEvent
+import android.view.View
 import android.view.WindowManager
 import android.widget.ImageView
 import android.content.Context
 import androidx.core.content.ContextCompat
+import androidx.core.view.GestureDetectorCompat
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.gms.tasks.OnCompleteListener
 import com.google.firebase.FirebaseApp
@@ -139,12 +145,40 @@ class MainApplication : Application(), Application.ActivityLifecycleCallbacks {
                 setImageResource(R.drawable.ic_cobrowse_favicon)
                 imageTintList = null  // Disable automatic tinting
                 backgroundTintList = null  // Remove FAB background color
-                setOnClickListener { 
-                    Log.d(TAG, "Virtual agent widget clicked")
-                    VoiceChatIframeController.getInstance().toggleSession()
-                }
                 scaleX = 0.8f
                 scaleY = 0.8f
+                
+                // Set up gesture detection
+                val gestureDetector = GestureDetectorCompat(activity, object : GestureDetector.SimpleOnGestureListener() {
+                    override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                        Log.d(TAG, "Widget single tap - starting session")
+                        VoiceChatIframeController.getInstance().startSession()
+                        return true
+                    }
+                    
+                    override fun onDoubleTap(e: MotionEvent): Boolean {
+                        Log.d(TAG, "Widget double tap - stopping session")
+                        VoiceChatIframeController.getInstance().stopSession()
+                        return true
+                    }
+                })
+                
+                // Handle touch events for press and hold
+                setOnTouchListener { _, event ->
+                    gestureDetector.onTouchEvent(event)
+                    
+                    when (event.action) {
+                        MotionEvent.ACTION_DOWN -> {
+                            Log.d(TAG, "Widget press down - unmuting mic")
+                            VoiceChatIframeController.getInstance().setMicMuted(false)
+                        }
+                        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                            Log.d(TAG, "Widget press up - muting mic")
+                            VoiceChatIframeController.getInstance().setMicMuted(true)
+                        }
+                    }
+                    false // Return false to allow gesture detector to handle taps
+                }
             }
             
             val params = WindowManager.LayoutParams().apply {

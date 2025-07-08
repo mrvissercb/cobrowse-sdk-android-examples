@@ -10,7 +10,7 @@ import android.view.MenuItem
 import android.view.View
 import android.widget.FrameLayout
 import androidx.activity.OnBackPressedCallback
-import androidx.appcompat.app.AppCompatActivity
+import io.cobrowse.sample.ui.InteractionTrackingActivity
 import androidx.appcompat.view.menu.MenuBuilder
 import androidx.appcompat.widget.ActionMenuView
 import androidx.appcompat.widget.LinearLayoutCompat
@@ -47,7 +47,7 @@ import io.cobrowse.sample.ui.VoiceChatIframeController
 /**
  * Activity that hosts all fragments when user is logged in.
  */
-class MainActivity : AppCompatActivity(),
+class MainActivity : InteractionTrackingActivity(),
     CobrowseIO.Redacted,
     CobrowseIO.Unredacted,
     ICobrowseRedactionContainer by CobrowseRedactionContainer() {

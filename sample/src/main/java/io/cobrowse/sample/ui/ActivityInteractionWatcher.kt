@@ -2,9 +2,13 @@ package io.cobrowse.sample.ui
 
 import android.app.Activity
 import android.util.Log
+import android.view.MotionEvent
+import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
+import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageButton
 import io.cobrowse.sample.data.getAndroidLogTag
 
 /**

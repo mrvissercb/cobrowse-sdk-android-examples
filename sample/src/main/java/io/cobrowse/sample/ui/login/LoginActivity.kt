@@ -13,7 +13,7 @@ import android.widget.EditText
 import android.widget.ProgressBar
 import android.widget.Toast
 import androidx.annotation.StringRes
-import androidx.appcompat.app.AppCompatActivity
+import io.cobrowse.sample.ui.InteractionTrackingActivity
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.core.view.MenuProvider
 import androidx.lifecycle.Observer
@@ -28,7 +28,7 @@ import io.cobrowse.sample.ui.main.MainActivity
 /**
  * Activity with the login form.
  */
-class LoginActivity : AppCompatActivity(), CobrowseIO.Redacted {
+class LoginActivity : InteractionTrackingActivity(), CobrowseIO.Redacted {
 
     private lateinit var loginViewModel: LoginViewModel
     private lateinit var binding: ActivityLoginBinding

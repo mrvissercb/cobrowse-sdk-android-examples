@@ -1,5 +1,6 @@
 package io.cobrowse.sample
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.Application
 import android.graphics.PixelFormat
@@ -24,6 +25,7 @@ import io.cobrowse.CobrowseIO
 import io.cobrowse.sample.data.CobrowseSessionDelegate
 import io.cobrowse.sample.data.getAndroidLogTag
 import io.cobrowse.sample.ui.VoiceChatIframeController
+import io.cobrowse.sample.ui.InteractionTracker
 
 /**
  * Android application class.
@@ -43,7 +45,6 @@ class MainApplication : Application(), Application.ActivityLifecycleCallbacks {
         // Register for activity lifecycle callbacks
         registerActivityLifecycleCallbacks(this)
 
-        System.out.println("Ok going to initialize...")
         with(CobrowseIO.instance()) {
             api("https://cobrowse-branden.ngrok.dev")
             license("85jA6dDyfO6a2w")
@@ -66,6 +67,9 @@ class MainApplication : Application(), Application.ActivityLifecycleCallbacks {
         // Initialize voice chat iframe controller
         Log.d(TAG, "Initializing VoiceChatIframeController from MainApplication")
         VoiceChatIframeController.getInstance().initialize(this)
+        
+        // Setup crash recovery for InteractionTracker
+        setupCrashRecovery()
 
         // If using Firebase Messaging to start sessions please include your own `google-services.json`
         if (FirebaseApp.getApps(this).size > 0) {
@@ -95,23 +99,30 @@ class MainApplication : Application(), Application.ActivityLifecycleCallbacks {
         // Ensure permissions are requested for voice chat
         VoiceChatIframeController.getInstance().requestPermissionsIfNeeded(activity)
         
+        // Start UI interaction tracking for this activity
+        InteractionTracker.getInstance().startMonitoring(activity)
+        
         Log.d(TAG, "onActivityResumed: ${activity.javaClass.simpleName}, widget exists: ${virtualAgentWidget != null}")
         // Always remove any existing widget and create a new one for this activity
         removeVirtualAgentWidget()
         addVirtualAgentWidget(activity)
     }
-    override fun onActivityPaused(activity: Activity) {}
+    override fun onActivityPaused(activity: Activity) {
+        // Stop UI interaction tracking for this activity
+        InteractionTracker.getInstance().stopMonitoring(activity)
+    }
     override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
     override fun onActivityStopped(activity: Activity) {
         activityCount--
         if (activityCount == 0) {
             // All activities stopped - app is going to background
-            Log.d(TAG, "App going to background - completely destroying voice chat")
+            Log.d(TAG, "App going to background - completely destroying voice chat and cleaning up interaction tracking")
             try {
                 // More aggressive cleanup when app goes to background
                 VoiceChatIframeController.getInstance().destroy()
+                InteractionTracker.getInstance().cleanupAll()
             } catch (e: Exception) {
-                Log.w(TAG, "Error destroying voice chat", e)
+                Log.w(TAG, "Error during background cleanup", e)
             }
         }
         
@@ -134,11 +145,37 @@ class MainApplication : Application(), Application.ActivityLifecycleCallbacks {
     private fun cleanupVoiceChat() {
         try {
             VoiceChatIframeController.getInstance().destroy()
+            InteractionTracker.getInstance().cleanupAll()
         } catch (e: Exception) {
-            Log.w(TAG, "Error cleaning up voice chat", e)
+            Log.w(TAG, "Error cleaning up voice chat and interaction tracking", e)
         }
     }
 
+    /**
+     * Setup crash recovery mechanism for InteractionTracker cleanup
+     */
+    private fun setupCrashRecovery() {
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        
+        Thread.setDefaultUncaughtExceptionHandler { thread, exception ->
+            Log.e(TAG, "Uncaught exception detected, performing emergency cleanup", exception)
+            
+            try {
+                // Emergency cleanup of InteractionTracker to prevent memory leaks
+                InteractionTracker.getInstance().cleanupAll()
+                Log.d(TAG, "Emergency InteractionTracker cleanup completed")
+            } catch (cleanupException: Exception) {
+                Log.e(TAG, "Error during emergency cleanup", cleanupException)
+            }
+            
+            // Call the original handler to maintain normal crash behavior
+            defaultHandler?.uncaughtException(thread, exception)
+        }
+        
+        Log.d(TAG, "Crash recovery mechanism setup complete")
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
     private fun addVirtualAgentWidget(activity: Activity) {
         try {
             virtualAgentWidget = FloatingActionButton(activity).apply {

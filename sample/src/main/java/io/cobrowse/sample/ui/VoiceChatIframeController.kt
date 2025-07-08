@@ -162,7 +162,7 @@ class VoiceChatIframeController private constructor() {
                     console.log('Main HTML loaded, setting up iframe communication');
                     
                     window.addEventListener('message', function(event) {
-                        console.log('Received message from iframe:', event.data);
+                        console.log('Received message from iframe:', JSON.stringify(event.data, null, 2));
                         Android.onMessage(JSON.stringify(event.data));
                     });
                     
@@ -328,11 +328,6 @@ class VoiceChatIframeController private constructor() {
     }
     
     fun stopSession() {
-        if (!isSessionActive) {
-            Log.d(TAG, "No active session to stop")
-            return
-        }
-        
         val webView = requireNotNull(webView) { "WebView not initialized" }
         try {
             val message = JSONObject().apply {

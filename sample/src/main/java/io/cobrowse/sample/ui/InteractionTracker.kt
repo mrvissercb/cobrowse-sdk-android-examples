@@ -1,11 +1,13 @@
 package io.cobrowse.sample.ui
 
 import android.app.Activity
+import android.content.SharedPreferences
 import android.util.Log
 import android.view.MotionEvent
 import android.view.View
 import android.widget.Button
 import android.widget.ImageButton
+import androidx.preference.PreferenceManager
 import io.cobrowse.sample.data.getAndroidLogTag
 
 /**
@@ -30,6 +32,8 @@ class InteractionTracker private constructor() {
     }
 
     private val activityWatchers = mutableMapOf<Activity, ActivityInteractionWatcher>()
+    private var preferencesListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
+    private var isPreferenceListenerRegistered = false
 
     /**
      * Start monitoring UI interactions for the given activity
@@ -43,6 +47,9 @@ class InteractionTracker private constructor() {
         val watcher = ActivityInteractionWatcher(activity)
         activityWatchers[activity] = watcher
         watcher.attachGlobalListeners()
+        
+        // Setup global preference listener on first activity
+        setupGlobalPreferenceListener(activity)
         
         Log.d(TAG, "Interaction monitoring started for ${activity.javaClass.simpleName}")
     }
@@ -71,6 +78,9 @@ class InteractionTracker private constructor() {
             }
         }
         activityWatchers.clear()
+        
+        // Clean up preference listener
+        cleanupGlobalPreferenceListener()
     }
 
     /**
@@ -163,6 +173,73 @@ class InteractionTracker private constructor() {
             is Button -> "button"
             is ImageButton -> "image button"
             else -> "clickable element"
+        }
+    }
+
+    /**
+     * Setup global preference change listener
+     */
+    private fun setupGlobalPreferenceListener(activity: Activity) {
+        if (isPreferenceListenerRegistered) {
+            return // Already registered
+        }
+        
+        try {
+            val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(activity)
+            
+            preferencesListener = SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
+                handlePreferenceChange(prefs, key)
+            }
+            
+            sharedPreferences.registerOnSharedPreferenceChangeListener(preferencesListener)
+            isPreferenceListenerRegistered = true
+            
+            Log.d(TAG, "Global preference listener registered")
+        } catch (e: Exception) {
+            Log.w(TAG, "Error setting up global preference listener", e)
+        }
+    }
+
+    /**
+     * Clean up global preference listener
+     */
+    private fun cleanupGlobalPreferenceListener() {
+        preferencesListener?.let { listener ->
+            try {
+                // We need an activity context to get SharedPreferences for cleanup
+                activityWatchers.keys.firstOrNull()?.let { activity ->
+                    val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(activity)
+                    sharedPreferences.unregisterOnSharedPreferenceChangeListener(listener)
+                    Log.d(TAG, "Global preference listener unregistered")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Error cleaning up global preference listener", e)
+            }
+        }
+        
+        preferencesListener = null
+        isPreferenceListenerRegistered = false
+    }
+
+    /**
+     * Handle preference changes and send contextual updates
+     */
+    private fun handlePreferenceChange(prefs: SharedPreferences, key: String?) {
+        if (key == null) return
+        
+        try {
+            val value = prefs.all[key]
+            val message = when (value) {
+                is Boolean -> "User ${if (value) "enabled" else "disabled"} preference '$key'"
+                is String -> "User changed preference '$key' to '$value'"
+                is Int, is Long, is Float -> "User changed preference '$key' to '$value'"
+                else -> "User changed preference '$key'"
+            }
+            
+            Log.d(TAG, "Preference change detected: $message")
+            sendContextualUpdate(message)
+        } catch (e: Exception) {
+            Log.w(TAG, "Error handling preference change for key: $key", e)
         }
     }
 

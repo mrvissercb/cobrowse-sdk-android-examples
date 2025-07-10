@@ -95,12 +95,29 @@ class InteractionTracker private constructor() {
         // Find the view at the touch coordinates
         val rootView = activity.findViewById<View>(android.R.id.content)
         val touchedView = findViewAt(rootView, event.x, event.y)
+        val clickableView = touchedView?.let { findClickableViewInHierarchy(it) }
         
-        if (touchedView != null && isClickableView(touchedView)) {
-            handleViewClick(touchedView)
+        if (clickableView != null) {
+            handleViewClick(clickableView)
         }
         
         return false // Don't consume the event, let normal processing continue
+    }
+
+    /**
+     * Find the first clickable view in the parent hierarchy starting from the given view
+     */
+    private fun findClickableViewInHierarchy(view: View): View? {
+        var currentView: View? = view
+        
+        while (currentView != null) {
+            if (isClickableView(currentView)) {
+                return currentView
+            }
+            currentView = currentView.parent as? View
+        }
+        
+        return null
     }
 
     /**
@@ -149,9 +166,20 @@ class InteractionTracker private constructor() {
             return false
         }
         
-        return view is Button || 
-               view is ImageButton || 
-               (view.isClickable && view.hasOnClickListeners())
+        // Check for explicitly clickable views
+        if (view is Button || view is ImageButton) {
+            return true
+        }
+        
+        // For other views, check if they have click listeners
+        // Note: We check hasOnClickListeners first because some views (like FrameLayout)
+        // might have listeners but not report as clickable immediately
+        if (view.hasOnClickListeners()) {
+            return true
+        }
+        
+        // Fallback to checking if view is clickable (covers views with clickable="true" in XML)
+        return view.isClickable
     }
 
     /**

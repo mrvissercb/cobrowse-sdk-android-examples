@@ -22,7 +22,10 @@ import org.json.JSONObject
  */
 class VoiceChatIframeController private constructor() {
 
-    private val vaUrl = "https://b91fd8994b7d.ngrok.app"
+    private val vaFrontendUrl = "https://d2ay6axpvgi6ie.cloudfront.net"
+    private val vaServerUrl = "https://25ul4tljkj.execute-api.us-east-2.amazonaws.com/prod"
+    private val vaAgentId = "agent_01jym5gzqxe3k9a0e0q2mks6q5"
+    private val vaAgentCobrowseAvailable = true
 
     private var webView: WebView? = null
     private var currentStatus: String = "disconnected"
@@ -156,7 +159,7 @@ class VoiceChatIframeController private constructor() {
                 </style>
             </head>
             <body>
-                <iframe id='xi-iframe' src='$vaUrl/iframe' 
+                <iframe id='xi-iframe' src='$vaFrontendUrl/iframe' 
                         allow='microphone' frameborder='0'></iframe>
                 <script>
                     console.log('Main HTML loaded, setting up iframe communication');
@@ -198,8 +201,8 @@ class VoiceChatIframeController private constructor() {
             </html>
         """.trimIndent()
 
-        Log.d(TAG, "Loading iframe HTML with base URL: $vaUrl")
-        webView.loadDataWithBaseURL(vaUrl, html, "text/html", "UTF-8", null)
+        Log.d(TAG, "Loading iframe HTML with base URL: $vaFrontendUrl")
+        webView.loadDataWithBaseURL(vaFrontendUrl, html, "text/html", "UTF-8", null)
     }
 
     private inner class WebAppInterface {
@@ -257,10 +260,10 @@ class VoiceChatIframeController private constructor() {
         try {
             val initPayload = JSONObject().apply {
                 put("agentProfile", JSONObject().apply {
-                    put("agentId", "agent_01jxx23q95es3a1y7amhf0jbc4")
-                    put("cobrowseAvailable", true)
+                    put("agentId", vaAgentId)
+                    put("cobrowseAvailable", vaAgentCobrowseAvailable)
                 })
-                put("apiBaseUrl", vaUrl)
+                put("apiBaseUrl", vaServerUrl)
                 put("deviceId", deviceId)
                 put("micMuted", true)
                 put("url", "https://financetracker.com")

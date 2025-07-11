@@ -46,8 +46,8 @@ class MainApplication : Application(), Application.ActivityLifecycleCallbacks {
         registerActivityLifecycleCallbacks(this)
 
         with(CobrowseIO.instance()) {
-            api("https://cobrowse-branden.ngrok.dev")
-            license("85jA6dDyfO6a2w")
+            api("https://staging.cbrws.io")
+            license("2mdVKT2vhxxBzg")
             customData(buildMap<String, String> {
                 put(CobrowseIO.USER_EMAIL_KEY, "android@demo.com")
                 put(CobrowseIO.DEVICE_NAME_KEY, "Android Demo")
